@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
     minHeight: 80,
     maxHeight: 120,
     padding: 15,
-    paddingLeft: 20,
+    paddingBottom: 18,
     alignItems: "flex-end",
     flexDirection: "row",
     shadowColor: "#000",
