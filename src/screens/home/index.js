@@ -1,19 +1,38 @@
-import React, { useState, useEffect } from 'react'
-import { View, ActivityIndicator, TextInput, StyleSheet, TouchableOpacity } from 'react-native'
+import React, { useState, useEffect, useRef } from 'react'
+import { Alert, View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native'
 import { Header, Loading } from '../../components'
 import { LinearGradient } from 'expo-linear-gradient'
 import { FontAwesome5 } from '@expo/vector-icons'
-import MapView, { Marker,Polygon } from 'react-native-maps'
-import { requestPermissionsAsync, getCurrentPositionAsync } from 'expo-location'
+import MapView, { Marker, Polygon } from 'react-native-maps'
+import {
+  requestPermissionsAsync,
+  getCurrentPositionAsync,
+  geocodeAsync,
+  reverseGeocodeAsync
+} from 'expo-location'
 import colors from '../../constants/colors.json'
 
+const latitudeDelta =  0.04
+const longitudeDelta = 0.04
+
 export default function Home() {
-  const [currentRegion, setCurrentRegion] = useState(null)
+  const [initialRegion, setInitialRegion] = useState({
+    latitudeDelta,
+    longitudeDelta
+  })
+  const [currentRegion, setCurrentRegion] = useState({
+    latitudeDelta,
+    longitudeDelta
+  })
   const [polygonCoordinates, setPolygonCoordinates] = useState(null)
   const [customRegion, setCustomRegion] = useState("")
+  const [loading, setLoading] = useState(false)
+  const inputRef = useRef()
 
   useEffect(() => {
     async function loadInitialPosition() {
+      setLoading(true)
+
       const { granted } = await requestPermissionsAsync()
 
       if (granted) {
@@ -21,24 +40,47 @@ export default function Home() {
           enableHighAccuracy: true
         })
 
-        const { latitude, longitude } = coords
+        if(coords){
+          const { latitude, longitude } = coords
 
-        setCurrentRegion({
-          latitude,
-          longitude,
-          latitudeDelta: 0.04,
-          longitudeDelta: 0.04
-        })
+          setInitialRegion({
+            ...initialRegion,
+            latitude,
+            longitude
+          })
 
-        setPolygonCoordinates(
-          coordinates = [
+          setPolygonCoordinates(
+            coordinates = [
               { latitude: -21.7608, longitude: -45.9975 },
               { latitude: -21.7782, longitude: -45.9816 },
               { latitude: -21.7762, longitude: -45.9565 },
               { latitude: -21.7610, longitude: -45.9542 }
-          ]
+            ]
+          )
+
+          const region = await reverseGeocodeAsync({ latitude, longitude })
+
+          if (region.length) {
+            let { city, region: uf, street } = region[0]
+            city = city ? (city + ", ") : ""
+            uf = uf || ""
+            street = street ? (street + ", ") : ""
+
+            setCustomRegion(street + city + uf)
+          }
+        }
+      }else{
+        Alert.alert(
+          'Sorry for this error',
+          'You did not grant access to your location, so we will not be able to show results for your location.',
+          [
+            { text: 'OK', onPress: () => console.log('OK Pressed') }
+          ],
+          { cancelable: false }
         )
       }
+
+      setLoading(false)
     }
 
     loadInitialPosition()
@@ -46,17 +88,47 @@ export default function Home() {
 
   const handleChange = (region) => setCustomRegion(region)
 
+  const changeRegion = async () => {
+    if(inputRef.current && inputRef.current.isFocused()){
+      inputRef.current.blur()
+    }
+
+    setLoading(true)
+
+    const region = await geocodeAsync(customRegion)
+
+    if (region.length) {
+      const { latitude, longitude } = region[0]
+      setCurrentRegion({ ...currentRegion, latitude, longitude })
+    }else{
+      Alert.alert(
+        'Sorry for this error',
+        "We couldn't find a region with these characteristics, try to be more precise.",
+        [
+          { text: 'OK', onPress: () => console.log('OK Pressed') }
+        ],
+        { cancelable: false }
+      )
+    }
+
+    setLoading(false)
+  }
+
   const renderMap = () => {
-    if (!currentRegion) {
+    if (!initialRegion.latitude || !initialRegion.longitude) {
+      if(loading){
+        return null
+      }
+      
       return (
-        <Loading isLoading={true} />
+        <Text>We can't connect to this location.</Text>
       )
     }
 
     return (
-      <MapView initialRegion={currentRegion} style={styles.mapContainer}>
-        <Polygon coordinates={polygonCoordinates} strokeColor={'rgba(255, 0, 0,0.9)'} fillColor={'rgba(255, 0, 0,0.4)'}/>
-        <Marker coordinate={{ latitude: currentRegion.latitude, longitude: currentRegion.longitude }} />
+      <MapView initialRegion={initialRegion} region={currentRegion} style={styles.mapContainer}>
+        {/* <Polygon coordinates={polygonCoordinates} strokeColor={'rgba(255, 0, 0,0.9)'} fillColor={'rgba(255, 0, 0,0.4)'} /> */}
+        <Marker coordinate={{ latitude: initialRegion.latitude, longitude: initialRegion.longitude }} />
       </MapView>
     )
   }
@@ -65,18 +137,34 @@ export default function Home() {
     <>
       <Header title="Home" />
 
+      <Loading isLoading={loading} />
+
       <View style={styles.container}>
         <View style={styles.searchContainer}>
           <View style={styles.inputContainer}>
-            <FontAwesome5 style={styles.inputIcon} name="search" size={16} color={colors["text"]} />
+            <FontAwesome5 style={styles.inputIcon} 
+              name="search" 
+              size={16} 
+              color={colors["text"]}
+              onPress={() => changeRegion()} 
+            />
             <TextInput
+              ref={inputRef}
               style={styles.textField}
               onChangeText={text => handleChange(text)}
               placeholder="Search a custom region..."
               value={customRegion}
             />
+            {customRegion.length > 0  && inputRef.current && inputRef.current.isFocused() && (
+              <FontAwesome5 style={styles.inputIcon} 
+              name="times" 
+              size={16} 
+              color={colors["text"]}
+              onPress={() => setCustomRegion("")} 
+            />
+            )}    
           </View>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => changeRegion()}>
             <LinearGradient style={styles.buttonContainer} colors={colors.gradient}>
               <FontAwesome5 name="paper-plane" solid size={18} color="#FFFFFF" />
             </LinearGradient>

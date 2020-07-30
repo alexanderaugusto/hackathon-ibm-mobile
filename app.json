@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Waterson",
+    "slug": "waterson_mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo_mini.png",
@@ -23,10 +23,15 @@
     },
     "android": {
       "package": "com.hackathonibm.mobile",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBxbJEY0goL8FPiyAPy8drJjuky_fmY9ho"
+        }
+      },
       "versionCode": 1
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/logo_mini.png"
     }
   }
 }

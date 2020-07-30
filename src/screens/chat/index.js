@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { View, ScrollView, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native'
+import { Alert, View, ScrollView, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native'
 import { Header, Loading } from '../../components'
 import { LinearGradient } from 'expo-linear-gradient'
 import { FontAwesome5 } from '@expo/vector-icons'
@@ -28,6 +28,7 @@ export default function Chat() {
   ])
   const [sessionId, setSessionId] = useState("")
   const [loading, setLoading] = useState(false)
+  const [answerLoading, setAnswerLoading] = useState(false)
   const scrollRef = useRef()
 
   useEffect(() => {
@@ -39,7 +40,14 @@ export default function Chat() {
           setSessionId(res.data.session_id)
         })
         .catch(() => {
-          console.log("deu ruim")
+          Alert.alert(
+            'Sorry for this error',
+            'There was an error connecting with Waterson Assistant, we are already solving the problem, please try again later.',
+            [
+              { text: 'OK', onPress: () => console.log('OK Pressed') }
+            ],
+            { cancelable: false }
+          )
         })
 
       setLoading(false)
@@ -56,28 +64,34 @@ export default function Chat() {
       session_id: sessionId
     }
 
-    setLoading(true)
+    const newMessages = [...messages, { user: "user-logged", text: currentMessage }]
+    setMessages(newMessages)
+
+    setAnswerLoading(true)
 
     await api.post("/assistent/message", data)
       .then((res) => {
         setMessages([
-          ...messages,
-          {
-            user: "user-logged",
-            text: currentMessage
-          },
+          ...newMessages,
           {
             user: "waterson-assistent",
             text: res.data.message || "I'm working hard, but I still don't understand this question :("
           }
         ])
+
         setCurrentMessage("")
       })
       .catch(() => {
-        console.log("deu ruim")
+        setMessages([
+          ...newMessages,
+          {
+            user: "waterson-assistent",
+            text: res.data.message || "Sorry! An error occurred with our assistant, we are already checking, come back again later, thanks!"
+          }
+        ])
       })
 
-    setLoading(false)
+    setAnswerLoading(false)
   }
 
   return (
@@ -91,22 +105,31 @@ export default function Chat() {
           ref={scrollRef}
           onContentSizeChange={() => scrollRef.current.scrollToEnd({ animated: true })}
         >
-          {messages.map((message, index) => {
-            return (
-              <View key={index}
-                style={{
-                  ...styles.message,
-                  ...styles[message.user === "user-logged" ? "userMessage" : "assistentMessage"]
-                }}
-              >
-                <Text style={{
-                  ...styles[message.user === "user-logged" ? "userMessageText" : "assistentMessageText"]
-                }}>
-                  {message.text}
-                </Text>
+          <>
+            {messages.map((message, index) => {
+              return (
+                <View key={index}
+                  style={{
+                    ...styles.message,
+                    ...styles[message.user === "user-logged" ? "userMessage" : "assistentMessage"]
+                  }}
+                >
+                  <Text style={{
+                    ...styles[message.user === "user-logged" ? "userMessageText" : "assistentMessageText"]
+                  }}>
+                    {message.text}
+                  </Text>
+                </View>
+              )
+            })}
+            {answerLoading && (
+              <View style={{ ...styles.message, ...styles.assistentMessage }}>
+                <Text style={styles.assistentMessageText}>
+                  Processing...
+              </Text>
               </View>
-            )
-          })}
+            )}
+          </>
         </ScrollView>
 
         <View style={styles.chatInput}>
@@ -163,6 +186,11 @@ const styles = StyleSheet.create({
   assistentMessageText: {
     color: colors["text"],
     fontSize: 16
+  },
+  answerLoading: {
+    // backgroundColor: "#FFFFFF",
+    alignSelf: 'flex-start',
+    marginRight: "20%"
   },
   chatInput: {
     flexDirection: "row",
