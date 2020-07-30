@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { View, ActivityIndicator, TextInput, StyleSheet, TouchableOpacity } from 'react-native'
-import { Header } from '../../components'
+import { Header, Loading } from '../../components'
 import { LinearGradient } from 'expo-linear-gradient'
 import { FontAwesome5 } from '@expo/vector-icons'
 import MapView, { Marker,Polygon } from 'react-native-maps'
@@ -49,9 +49,7 @@ export default function Home() {
   const renderMap = () => {
     if (!currentRegion) {
       return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors["bg-dark"]} />
-        </View>
+        <Loading isLoading={true} />
       )
     }
 
@@ -96,11 +94,6 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     flex: 1
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center"
   },
   searchContainer: {
     flexDirection: "row",
