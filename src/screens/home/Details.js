@@ -53,10 +53,9 @@ export default function HomeDetails() {
         <ScrollView style={styles.listContainer}>
           {everyWeatherConditions.map((value) => {
             return (
-              <View>
+              <View key={value.date}>
                 <Text style={styles.textDate}>{value.date}</Text>
                 <FlatList
-                  key={value.date}
                   keyExtractor={item => item.id}
                   data={createRows(value.data, 2)}
                   numColumns={2}
