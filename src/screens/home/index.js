@@ -11,8 +11,11 @@ import {
   reverseGeocodeAsync
 } from 'expo-location'
 import colors from '../../constants/colors.json'
+import api from '../../services/api'
+import { formatTemp, formatScore, formatWeatherData } from '../../utils/util'
+import { useNavigation } from '@react-navigation/native'
 
-const latitudeDelta =  0.04
+const latitudeDelta = 0.04
 const longitudeDelta = 0.04
 
 export default function Home() {
@@ -20,76 +23,102 @@ export default function Home() {
     latitudeDelta,
     longitudeDelta
   })
-  const [currentRegion, setCurrentRegion] = useState({
-    latitudeDelta,
-    longitudeDelta
-  })
+  const [currentRegion, setCurrentRegion] = useState(null)
+  const [currentWeather, setCurrentWeather] = useState(null)
+  const [menuWeatherOpen, setMenuWeatherOpen] = useState(true)
   const [polygonCoordinates, setPolygonCoordinates] = useState(null)
   const [customRegion, setCustomRegion] = useState("")
   const [loading, setLoading] = useState(false)
+
   const inputRef = useRef()
 
-  useEffect(() => {
-    async function loadInitialPosition() {
-      setLoading(true)
+  const navigation = useNavigation()
 
-      const { granted } = await requestPermissionsAsync()
+  const getInitialPosition = async () => {
+    setLoading(true)
 
-      if (granted) {
-        const { coords } = await getCurrentPositionAsync({
-          enableHighAccuracy: true
+    const { granted } = await requestPermissionsAsync()
+
+    if (granted) {
+      const { coords } = await getCurrentPositionAsync({
+        enableHighAccuracy: true
+      })
+
+      if (coords) {
+        const { latitude, longitude } = coords
+
+        setInitialRegion({
+          ...initialRegion,
+          latitude,
+          longitude
         })
 
-        if(coords){
-          const { latitude, longitude } = coords
+        setCurrentRegion({
+          ...initialRegion,
+          latitude,
+          longitude
+        })
 
-          setInitialRegion({
-            ...initialRegion,
-            latitude,
-            longitude
-          })
+        getWeatherConditions(latitude, longitude)
 
-          setPolygonCoordinates(
-            coordinates = [
-              { latitude: -21.7608, longitude: -45.9975 },
-              { latitude: -21.7782, longitude: -45.9816 },
-              { latitude: -21.7762, longitude: -45.9565 },
-              { latitude: -21.7610, longitude: -45.9542 }
-            ]
-          )
-
-          const region = await reverseGeocodeAsync({ latitude, longitude })
-
-          if (region.length) {
-            let { city, region: uf, street } = region[0]
-            city = city ? (city + ", ") : ""
-            uf = uf || ""
-            street = street ? (street + ", ") : ""
-
-            setCustomRegion(street + city + uf)
-          }
-        }
-      }else{
-        Alert.alert(
-          'Sorry for this error',
-          'You did not grant access to your location, so we will not be able to show results for your location.',
-          [
-            { text: 'OK', onPress: () => console.log('OK Pressed') }
-          ],
-          { cancelable: false }
+        setPolygonCoordinates(
+          coordinates = [
+            { latitude: -21.7608, longitude: -45.9975 },
+            { latitude: -21.7782, longitude: -45.9816 },
+            { latitude: -21.7762, longitude: -45.9565 },
+            { latitude: -21.7610, longitude: -45.9542 }
+          ]
         )
-      }
 
-      setLoading(false)
+        const region = await reverseGeocodeAsync({ latitude, longitude })
+
+        if (region.length) {
+          let { city, region: uf, street } = region[0]
+          city = city ? (city + ", ") : ""
+          uf = uf || ""
+          street = street ? (street + ", ") : ""
+
+          setCustomRegion(street + city + uf)
+        }
+      }
+    } else {
+      Alert.alert(
+        'Sorry for this error',
+        'You did not grant access to your location, so we will not be able to show results for your location.',
+        [
+          { text: 'OK', onPress: () => console.log('OK Pressed') }
+        ],
+        { cancelable: false }
+      )
     }
 
-    loadInitialPosition()
-  }, [])
+    setLoading(false)
+  }
+
+  const getWeatherConditions = async (latitude, longitude) => {
+    const response = await api.get("/get-iam-token")
+
+    const data = {
+      latitude,
+      longitude,
+      iam_token: response.data.iam_token
+    }
+
+    await api.post("/floods/weather-conditions/current", data)
+      .then((res) => {
+        setCurrentWeather(formatWeatherData(res.data))
+      })
+      .catch((err) => {
+        console.log(err)
+      })
+  }
+
+  useEffect(() => { (!initialRegion.latitude || !initialRegion.longitude) && getInitialPosition() }, [])
 
   const handleChange = (region) => setCustomRegion(region)
 
   const changeRegion = async () => {
-    if(inputRef.current && inputRef.current.isFocused()){
+    if (inputRef.current && inputRef.current.isFocused()) {
       inputRef.current.blur()
     }
 
@@ -100,7 +129,8 @@ export default function Home() {
     if (region.length) {
       const { latitude, longitude } = region[0]
       setCurrentRegion({ ...currentRegion, latitude, longitude })
-    }else{
+      getWeatherConditions(latitude, longitude)
+    } else {
       Alert.alert(
         'Sorry for this error',
         "We couldn't find a region with these characteristics, try to be more precise.",
@@ -114,39 +144,31 @@ export default function Home() {
     setLoading(false)
   }
 
-  const renderMap = () => {
-    if (!initialRegion.latitude || !initialRegion.longitude) {
-      if(loading){
-        return null
-      }
-      
-      return (
-        <Text>We can't connect to this location.</Text>
-      )
-    }
-
-    return (
-      <MapView initialRegion={initialRegion} region={currentRegion} style={styles.mapContainer}>
-        {/* <Polygon coordinates={polygonCoordinates} strokeColor={'rgba(255, 0, 0,0.9)'} fillColor={'rgba(255, 0, 0,0.4)'} /> */}
-        <Marker coordinate={{ latitude: initialRegion.latitude, longitude: initialRegion.longitude }} />
-      </MapView>
-    )
-  }
+  const goToDetails = () => navigation.navigate("home-details", { currentRegion })
 
   return (
     <>
-      <Header title="Home" />
+      <Header title="Home" options={[
+        {
+          title: "Reload",
+          onClick: () => getInitialPosition()
+        },
+        {
+          title: menuWeatherOpen ? "Close Weather Menu" : "Open Weather Menu",
+          onClick: () => setMenuWeatherOpen(!menuWeatherOpen)
+        }
+      ]} />
 
       <Loading isLoading={loading} />
 
       <View style={styles.container}>
         <View style={styles.searchContainer}>
           <View style={styles.inputContainer}>
-            <FontAwesome5 style={styles.inputIcon} 
-              name="search" 
-              size={16} 
+            <FontAwesome5 style={styles.inputIcon}
+              name="search"
+              size={16}
               color={colors["text"]}
-              onPress={() => changeRegion()} 
+              onPress={() => changeRegion()}
             />
             <TextInput
               ref={inputRef}
@@ -155,14 +177,14 @@ export default function Home() {
               placeholder="Search a custom region..."
               value={customRegion}
             />
-            {customRegion.length > 0  && inputRef.current && inputRef.current.isFocused() && (
-              <FontAwesome5 style={styles.inputIcon} 
-              name="times" 
-              size={16} 
-              color={colors["text"]}
-              onPress={() => setCustomRegion("")} 
-            />
-            )}    
+            {customRegion.length > 0 && inputRef.current && inputRef.current.isFocused() && (
+              <FontAwesome5 style={styles.inputIcon}
+                name="times"
+                size={16}
+                color={colors["text"]}
+                onPress={() => setCustomRegion("")}
+              />
+            )}
           </View>
           <TouchableOpacity onPress={() => changeRegion()}>
             <LinearGradient style={styles.buttonContainer} colors={colors.gradient}>
@@ -170,7 +192,45 @@ export default function Home() {
             </LinearGradient>
           </TouchableOpacity>
         </View>
-        {renderMap()}
+
+        {initialRegion.latitude && initialRegion.longitude && (
+          <MapView initialRegion={initialRegion} region={currentRegion} style={styles.mapContainer}>
+            {/* <Polygon coordinates={polygonCoordinates} strokeColor={'rgba(255, 0, 0,0.9)'} fillColor={'rgba(255, 0, 0,0.4)'} /> */}
+            <Marker coordinate={{ latitude: initialRegion.latitude, longitude: initialRegion.longitude }} />
+          </MapView>
+        )}
+
+        {(currentWeather && menuWeatherOpen) && (
+          <LinearGradient style={styles.weatherContainer} colors={colors.gradient}>
+            <View style={styles.weather}>
+              <View style={styles.weatherClose}>
+                <Text style={styles.weatherText}>Flood Score</Text>
+                <FontAwesome5
+                  name="times"
+                  size={20}
+                  color="#FFFFFF"
+                  onPress={() => setMenuWeatherOpen(false)}
+                />
+              </View>
+              <View style={styles.floodScore}>
+                <Text style={{ ...styles.weatherText, fontSize: 70 }}>
+                  {formatScore(currentWeather.flood_score)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.detailContainer}>
+              <View style={styles.temperature}>
+                <FontAwesome5 name={currentWeather.icon} solid size={22} color="#FFFFFF" />
+                <Text style={styles.weatherText}>
+                  {formatTemp(currentWeather.temperature)} - Today
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.detailButton} onPress={() => goToDetails()}>
+                <Text style={styles.detailButtonText}>Details</Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        )}
       </View>
     </>
   )
@@ -181,7 +241,8 @@ const styles = StyleSheet.create({
     flex: 1
   },
   mapContainer: {
-    flex: 1
+    flex: 1,
+    zIndex: 1
   },
   searchContainer: {
     flexDirection: "row",
@@ -220,5 +281,66 @@ const styles = StyleSheet.create({
     marginRight: 10,
     justifyContent: "center",
     alignItems: "center"
+  },
+  weatherContainer: {
+    position: "absolute",
+    alignSelf: "center",
+    width: "85%",
+    zIndex: 2,
+    bottom: 0,
+    marginVertical: 15,
+    borderRadius: 7,
+    padding: 10,
+    shadowOpacity: 0.5,
+    shadowRadius: 3,
+    shadowOffset: {
+      height: 0,
+      width: 0,
+    },
+    elevation: 2
+  },
+  weather: {
+    padding: 10
+  },
+  weatherClose: {
+    flex: 1,
+    marginTop: -10,
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between"
+  },
+  floodScore: {
+    justifyContent: "center",
+    alignItems: "center",
+    flex: 1
+  },
+  weatherText: {
+    color: "#FFFFFF",
+    fontSize: 19,
+    marginLeft: 15
+  },
+  detailContainer: {
+    padding: 10,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: "#FFFFFF"
+  },
+  temperature: {
+    flexDirection: "row",
+    alignItems: "flex-end"
+  },
+  detailButton: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 7,
+    paddingHorizontal: 25,
+    paddingVertical: 7,
+    marginTop: 10,
+    marginBottom: -10
+  },
+  detailButtonText: {
+    color: colors["title"]
   }
 })

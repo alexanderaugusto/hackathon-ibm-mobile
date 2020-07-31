@@ -7,6 +7,7 @@ import colors from './constants/colors.json'
 
 // Home
 import Home from './screens/home'
+import HomeDetails from './screens/home/Details'
 
 // Chat
 import Chat from './screens/chat'
@@ -45,6 +46,7 @@ export default function Routes() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="main" component={TabMenu} />
+        <Stack.Screen name="home-details" component={HomeDetails} />
       </Stack.Navigator>
     </NavigationContainer>
   )
